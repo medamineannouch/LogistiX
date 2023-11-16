@@ -1,1 +1,1 @@
-# AMALog
+# LogiNet
