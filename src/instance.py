@@ -7,8 +7,8 @@ import pandas as pd
 import random
 import numpy as np
 
-def read_data(filename="../data/filename.csv.gz"):
-    df = pd.read_csv(filename,index_col="zip")
+def read_data(filename="../data/data.xlsx"):
+    df = pd.read_excel(filename,index_col="zip")
     df.index = df.index.map(str)
     return df
 
@@ -25,9 +25,9 @@ def sample_locations(df, n_locations, rnd_stat):
     """
     sample = df.sample(n=n_locations, random_state=rnd_stat)
     return (
-        sample['name1'].to_dict(),
-        sample['name2'].to_dict(),
-        sample['name3'].to_dict(),
+        sample['province'].to_dict(),
+        sample['town'].to_dict(),
+        sample['address'].to_dict(),
         sample['latitude'].to_dict(),
         sample['longitude'].to_dict()
     )
@@ -64,9 +64,9 @@ def generate_locations(df, num_locations, random_state):
     """
 
     sample = df.sample(n=num_locations, random_state=random_state)
-    province = sample['name1'].to_dict()
-    town = sample['name2'].to_dict()
-    address = sample['name3'].to_dict()
+    province = sample['province'].to_dict()
+    town = sample['town'].to_dict()
+    address = sample['address'].to_dict()
     latitude = sample['latitude'].to_dict()
     longitude = sample['longitude'].to_dict()
 
@@ -109,7 +109,7 @@ def generate_demand(cust, prods):
     return {(c, p): random.randint(10, 100) for c in cust for p in prods}
 
 
-def generate_distribution_centers(df, n_dcs, random_state, cust_len):
+def generate_distribution_centers(cust_len,locations):
     """
         Generate distribution center locations and bounds.
 
@@ -124,14 +124,13 @@ def generate_distribution_centers(df, n_dcs, random_state, cust_len):
           (dc, dc_lb, dc_ub)
 
     """
-    locations = generate_locations(df, n_dcs, random_state)
     dc = {z: (locations['latitude'][z], locations['longitude'][z]) for z in locations['address'].keys()}
     dc_lb = {z: 0 for z in locations['address'].keys()}
     dc_ub = {z: (1000 + 25 * random.randint(1, 9) * cust_len) for z in locations['address'].keys()}
     return dc, dc_lb, dc_ub
 
 
-def generate_plants(df, nplant, random_state, prod_demand):
+def generate_plants(nplant, prod_demand,location):
     """
         Generate plant locations and upper bounds.
 
@@ -146,9 +145,8 @@ def generate_plants(df, nplant, random_state, prod_demand):
           (plant, plant_ub)
 
     """
-    locations = generate_locations(df, nplant, random_state)
-    plant = {z: (locations['latitude'][z], locations['longitude'][z]) for z in locations['address'].keys()}
-    plant_ub = {(z, p): (prod_demand[p] / nplant + 1000) for z in locations['address'].keys() for p in
+    plant = {z: (location['latitude'][z], location['longitude'][z]) for z in location['address'].keys()}
+    plant_ub = {(z, p): (prod_demand[p] / nplant + 1000) for z in location['address'].keys() for p in
                 prod_demand.keys()}
     return plant, plant_ub
 
@@ -167,26 +165,25 @@ def mk_instance(df, nplant, nd, nc, nprod, seed):
 
         Returns:
         - tuple: Tuple containing information for weight, customer locations, plant locations,
-          distribution center locations, lower bounds, upper bounds, demand, plant upper bounds, and customer names.
+          distribution center locations, lower bounds, upper bounds, demand , plant upper bounds and name
 
     """
     random.seed(seed)
-    rnd_stat = nplant.random.RandomState(seed=seed)
+    rnd_stat = np.random.RandomState(seed=seed)
 
     prods, weight = generate_products(nprod)
 
     locations_cust = generate_locations(df, nc, rnd_stat)
     cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in
             locations_cust['address'].keys()}
-    c_name = generate_customer_names(locations_cust)
 
     demand = generate_demand(cust, prods)
+    name=generate_customer_names(locations_cust)
+    dc, dc_lb, dc_ub = generate_distribution_centers(df, nd,  len(cust),locations_cust)
 
-    dc, dc_lb, dc_ub = generate_distribution_centers(df, nd, rnd_stat, len(cust))
+    plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_cust)
 
-    plant, plant_ub = generate_plants(df, nplant, rnd_stat, {p: sum(demand[c, p] for c in cust) for p in prods})
-
-    return weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, c_name
+    return weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
 
 
 def mk_instances():
@@ -202,12 +199,13 @@ def mk_instances():
     n_plants = 3
     n_prods = 5
     seeds = range(1, 11)
-    for n_custs in [3, 10, 100, 1000]:
+    for n_custs in [3]:
         n_dcs = n_custs
         for seed in seeds:
-            instance = mk_instance(df, n_plants, n_dcs, n_custs, n_prods, seed)
-            yield instance
 
+            (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = \
+                mk_instance(df, n_plants, n_dcs, n_custs, n_prods, seed)
+            yield (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name)
 
 
 
