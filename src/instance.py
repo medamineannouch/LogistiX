@@ -178,12 +178,12 @@ def mk_instance(df, nplant, nd, nc, nprod, seed):
             locations_cust['address'].keys()}
 
     demand = generate_demand(cust, prods)
-    name=generate_customer_names(locations_cust)
-    dc, dc_lb, dc_ub = generate_distribution_centers(df, nd,  len(cust),locations_cust)
+    name = generate_customer_names(locations_cust)
+    dc, dc_lb, dc_ub = generate_distribution_centers(  len(cust),locations_cust)
 
     plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_cust)
 
-    return weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
+    return prods, weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
 
 
 def mk_instances():
@@ -199,13 +199,13 @@ def mk_instances():
     n_plants = 3
     n_prods = 5
     seeds = range(1, 11)
-    for n_custs in [3]:
+    for n_custs in [3,10,100]:
         n_dcs = n_custs
         for seed in seeds:
 
-            (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = \
+            (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = \
                 mk_instance(df, n_plants, n_dcs, n_custs, n_prods, seed)
-            yield (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name)
+            yield (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name)
 
 
 
