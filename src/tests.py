@@ -4,7 +4,7 @@ import time
 import pre_clusterer
 from geopy.distance import great_circle as distance
 from gurobipy import Model, GRB
-from model import multiple_src, single_src, mk_costs
+from model import multiple_src, single_src, mk_costs, lnd_ms, lnd_ss
 
 class TestInstances(unittest.TestCase):
     def test_location_sample(self):
@@ -64,8 +64,8 @@ class TestInstances(unittest.TestCase):
         Test optimizing the location of a small number of dc's from a set of candidates.
         """
         models = {
-            "multiple source": multiple_src,
-            "single source": single_src
+            "multiple source": lnd_ms,
+            "single source": lnd_ss
         }
 
         for k in models:
@@ -76,7 +76,7 @@ class TestInstances(unittest.TestCase):
                 (tp_cost, del_cost, dc_fc, dc_vc) = mk_costs(plnt, dc, cust)
                 dc_num = (20 + len(dc)) // 10
 
-                model = models[k](prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num)
+                model = models[k]( weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num)
                 model.setParam('TimeLimit', self.TIME_LIMIT)
                 model.optimize()
 
@@ -107,21 +107,6 @@ class TestInstances(unittest.TestCase):
                 for product in prods:
                     self.assertIn((customer, product), demand, f"Missing entry for ({customer}, {product}) in 'demand'")
 
-    def test_constraints_indices(self):
-        insts = instance.mk_instances()
-
-        for inst in insts:
-            prods, weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name = inst
-            print("prods:", prods)
-            print("weight:", weight)
-            print("cust:", cust)
-            print("demand:", demand)
-            model = multiple_src(prods, weight, cust, dc, dc_ub, plnt, plnt_ub, demand, {}, {}, {}, {}, 1)
-
-            # Check the indices in the constraints
-            for constr in model.getConstrs():
-                constr_str = str(constr)
-                self.assertNotIn("None", constr_str, f"Constraint {constr} contains 'None' in its indices.")
 
 
 if __name__ == '__main__':

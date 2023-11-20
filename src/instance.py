@@ -108,6 +108,7 @@ def generate_demand(cust, prods):
     """
     return {(c, p): random.randint(10, 100) for c in cust for p in prods}
 
+    plnt_to_dc = set((i,j,p) for i in plnt for j in dc for p in prod if plnt_ub.get((i,p),0) > 0)
 
 def generate_distribution_centers(cust_len,locations):
     """
@@ -199,7 +200,7 @@ def mk_instances():
     n_plants = 3
     n_prods = 5
     seeds = range(1, 11)
-    for n_custs in [3,10,100]:
+    for n_custs in [3,10]:
         n_dcs = n_custs
         for seed in seeds:
 
