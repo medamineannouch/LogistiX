@@ -4,7 +4,7 @@ import time
 import pre_clusterer
 from geopy.distance import great_circle as distance
 from gurobipy import Model, GRB
-from model import multiple_src, single_src, mk_costs, lnd_ms, lnd_ss
+from model import multiple_src, single_src, mk_costs
 
 class TestInstances(unittest.TestCase):
     def test_location_sample(self):
@@ -64,8 +64,8 @@ class TestInstances(unittest.TestCase):
         Test optimizing the location of a small number of dc's from a set of candidates.
         """
         models = {
-            "multiple source": lnd_ms,
-            "single source": lnd_ss
+            "multiple source": multiple_src,
+            "single source": single_src
         }
 
         for k in models:

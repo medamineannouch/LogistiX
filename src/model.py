@@ -25,7 +25,106 @@ def mk_costs(plnt, dc, cust):
 
     return tp_cost, del_cost, dc_fc, dc_vc
 
-def multiple_src(prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
+
+
+def single_src(weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
+
+    prod = set(weight.keys())
+    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prod if plnt_ub.get((i, p), 0) > 0)
+    dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
+
+    model = Model()
+    x, y, z = {}, {}, {}
+    for (i, j, p) in plnt_to_dc:
+        x[i, j, p] = model.addVar(vtype='C', name=f'x[{i},{j},{p}]')
+    for j in dc:
+        for k in cust:
+            z[j, k] = model.addVar(vtype="B", name=f"z[{j},{k}]")
+
+    slack = {}
+    for k in cust:
+        slack[k] = model.addVar(vtype="C", name=f"slack[{k}]")
+
+    for j in dc:
+        y[j] = model.addVar(vtype='B', name=f'y[{j}]')
+
+    model.update()
+
+    #constraints
+    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}
+
+    # Customer demand constraint
+    for k in cust:
+        Cust_Demand_Cons[k] = model.addConstr(
+            quicksum(z[j, k] for j in dc) + slack[k]
+            == 1,
+            name=f'Cust_Demand_Cons[{k}]'
+        )
+
+    for j in dc:
+        for p in prod:
+            DC_Flow_Cons[j, p] = model.addConstr(
+                quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc)
+                ==
+                quicksum(demand[k, p] * z[j, k] for k in cust),
+                name=f'DC_Flow_Cons[{j},{p}]'
+            )
+
+    for j in dc:
+        for k in cust:
+            DC_Strong_Cons[j, k] = model.addConstr(
+                z[j, k]
+                <=
+                y[j],
+                name=f'DC_Strong_Cons[{j},{k}]'
+            )
+
+    for j in dc:
+        DC_UB_Cons[j] = model.addConstr(
+            dc_ub[j] * y[j]
+            >=
+            quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc),
+            name=f'DC_UB_Cons[{j}]'
+        )
+
+    for i in plnt:
+        for p in prod:
+            Plnt_UB_Cons[i, p] = model.addConstr(
+                plnt_ub[i, p]
+                >=
+                quicksum(x[i, j, p] for j in dc if (i, j, p) in plnt_to_dc),
+                name=f'Plnt_UB_Cons[{i},{p}]'
+            )
+
+    DC_Num_Cons = model.addConstr(
+        quicksum(y[j] for j in dc)
+        <=
+        dc_num,
+        name='DC_Num_Cons'
+    )
+
+    model.update()
+
+    # Calculate total demand for each customer
+    total_demand = {k: sum(demand[k, p] for p in prod) for k in cust}
+
+    # Objective function
+    model.setObjective(
+        quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
+        quicksum(weight[p] * del_cost[j, k] * total_demand[k] * z[j, k] for j in dc for k in cust) +
+        quicksum(dc_fc[j] * y[j] for j in dc) +
+        quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
+        quicksum(999999 * slack[k] for k in cust),
+        GRB.MINIMIZE
+    )
+    model.update()
+
+    # Store decision variables in the model for later access
+    model.__data = x, y
+    return model
+
+
+def multiple_src(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
     """
         Logistics network design, multiple sources.
 
@@ -55,41 +154,32 @@ def multiple_src(prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, 
               providing a comprehensive cost-based optimization.
     """
     prod = set(weight.keys())
-
-    dc_to_cust = set((j,k,p) for j in dc for k in cust for p in prods if demand[k,p] > 0)
-    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prods if plnt_ub.get((i, p), 0) > 0)
+    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prod if plnt_ub.get((i, p), 0) > 0)
+    dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
 
     model = Model()
+
+    #variables
     x, y = {}, {}
     for (i, j, p) in plnt_to_dc | dc_to_cust:
         x[i, j, p] = model.addVar(vtype='C', name=f'x[{i},{j},{p}]')
 
     slack = {}
-    for k in cust:
-        slack[k] = model.addVar(vtype="C", name=f"slack[{k}]")
+    for (k, p) in demand:
+        if demand[k, p] > 0.:
+            slack[k, p] = model.addVar(vtype="C", name=f"slack[{k},{p}]")
 
     for j in dc:
         y[j] = model.addVar(vtype='B', name=f'y[{j}]')
 
     model.update()
 
-    #constraints
-    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}
-
-    #check
-    print("Keys in demand dictionary:", demand.keys())
-
-
-    for k in demand.keys():
-        print("Processing key in demand:", k)
+    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, DC_LB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}, {}
 
     #customer demand constraint
     for k in tqdm(cust):
         for p in prod:
-            if (k, p) in dc_to_cust and demand.get((k, p), 0) > 0.:
-                print(f"Processing key: {k, p}")
-                if (k, p) not in demand:
-                    print(f"Key {k, p} not found in demand dictionary")
+            if demand[k, p] > 0.:
                 Cust_Demand_Cons[k, p] = model.addConstr(
                     quicksum(x[j, k, p] for j in dc if (j, k, p) in dc_to_cust) + slack[k, p]
                     ==
@@ -97,16 +187,16 @@ def multiple_src(prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, 
                     name=f'Cust_Demand_Cons[{k},{p}]'
                 )
 
-
     # Flow conservation constraint
     for j in tqdm(dc):
-        for p in prods:
+        for p in prod:
             DC_Flow_Cons[j, p] = model.addConstr(
                 quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc)
                 ==
                 quicksum(x[j, k, p] for k in cust if (j, k, p) in dc_to_cust),
                 name=f'DC_Flow_Cons[{j},{p}]'
             )
+
 
     # Strong activation constraint
     for (j, k, p) in dc_to_cust:
@@ -122,13 +212,13 @@ def multiple_src(prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, 
         DC_UB_Cons[j] = model.addConstr(
             dc_ub[j] * y[j]
             >=
-            quicksum(x[i, j, p] for i in plnt for p in prods if (i, j, p) in plnt_to_dc),
+            quicksum(x[i, j, p] for i in plnt for p in prod if (i, j, p) in plnt_to_dc),
             name=f'DC_UB_Cons[{j}]'
         )
 
     # Upper bound constraint for plants
     for i in tqdm(plnt):
-        for p in prods:
+        for p in prod:
             Plnt_UB_Cons[i, p] = model.addConstr(
                 plnt_ub[i, p]
                 >=
@@ -146,26 +236,20 @@ def multiple_src(prods,weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, 
 
     model.update()
 
-    total_demand = {k: sum(demand[k, p] for p in prods) for k in cust}
-
-    # Objective function
-    try:
-        model.setObjective(
-            quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-            quicksum(weight[p] * del_cost[j, k] * total_demand[k] * y[j] for j in dc for k in cust) +
-            quicksum(dc_fc[j] * y[j] for j in dc) +
-            quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-            quicksum(999999 * slack[k, p] for k in cust for p in prod if demand[k, p] > 0.)
-        )
-    except KeyError as e:
-        print(f"KeyError: {e}")
+    #Objective function
+    model.setObjective(
+        quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
+        quicksum(weight[p] * del_cost[j, k] * x[j, k, p] for (j, k, p) in dc_to_cust) +
+        quicksum(dc_fc[j] * y[j] for j in dc) +
+        quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
+        quicksum(999999 * slack[k, p] for k in cust for p in prod if demand[k, p] > 0.)
+    )
     model.update()
-    # Store decision variables in the model for later access
     model.__data = x, y
-
     return model
 
-def single_src(weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
+
+def single_source(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
     """
         Logistics network design, single source.
 
@@ -200,240 +284,6 @@ def single_src(weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost
     dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
 
     model = Model()
-    x, y, z = {}, {}, {}
-    for (i, j, p) in plnt_to_dc:
-        x[i, j, p] = model.addVar(vtype='C', name=f'x[{i},{j},{p}]')
-    for j in dc:
-        for k in cust:
-            z[j, k] = model.addVar(vtype="B", name=f"z[{j},{k}]")
-
-    slack = {}
-    for k in cust:
-        slack[k] = model.addVar(vtype="C", name=f"slack[{k}]")
-
-    for j in dc:
-        y[j] = model.addVar(vtype='B', name=f'y[{j}]')
-
-    model.update()
-
-    #constraints
-    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}
-
-    # Customer demand constraint
-    for k in cust:
-        Cust_Demand_Cons[k] = model.addConstr(
-            quicksum(z[j, k] for j in dc) + slack[k]
-            == 1,
-            name=f'Cust_Demand_Cons[{k}]'
-        )
-
-    # Flow conservation constraint
-    for j in dc:
-        for p in prod:
-            DC_Flow_Cons[j, p] = model.addConstr(
-                quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc)
-                ==
-                quicksum(demand[k, p] * z[j, k] for k in cust),
-                name=f'DC_Flow_Cons[{j},{p}]'
-            )
-
-    # Strong activation constraint
-    for j in dc:
-        for k in cust:
-            DC_Strong_Cons[j, k] = model.addConstr(
-                z[j, k]
-                <=
-                y[j],
-                name=f'DC_Strong_Cons[{j},{k}]'
-            )
-
-    # Upper bound constraint for distribution centers
-    for j in dc:
-        DC_UB_Cons[j] = model.addConstr(
-            dc_ub[j] * y[j]
-            >=
-            quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc),
-            name=f'DC_UB_Cons[{j}]'
-        )
-
-    # Upper bound constraint for plants
-    for i in plnt:
-        for p in prod:
-            Plnt_UB_Cons[i, p] = model.addConstr(
-                plnt_ub[i, p]
-                >=
-                quicksum(x[i, j, p] for j in dc if (i, j, p) in plnt_to_dc),
-                name=f'Plnt_UB_Cons[{i},{p}]'
-            )
-
-    # Constraint on the number of distribution centers to open
-    DC_Num_Cons = model.addConstr(
-        quicksum(y[j] for j in dc)
-        <=
-        dc_num,
-        name='DC_Num_Cons'
-    )
-
-    model.update()
-
-    # Calculate total demand for each customer
-    total_demand = {k: sum(demand[k, p] for p in prod) for k in cust}
-
-    # Objective function
-    model.setObjective(
-        quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(weight[p] * del_cost[j, k] * total_demand[k] * z[j, k] for j in dc for k in cust) +
-        quicksum(dc_fc[j] * y[j] for j in dc) +
-        quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(999999 * slack[k] for k in cust),
-        GRB.MINIMIZE
-    )
-    model.update()
-
-    # Store decision variables in the model for later access
-    model.__data = x, y
-    return model
-
-
-def lnd_ms(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
-    """
-    Logistics network design, multiple source
-
-    Gurobi model for multiple-source LND
-
-    :rtype: object of class `Model`, as defined in `gurobipy`
-    :weight: weight[p] -> unit weight for product `p`
-    :cust: dict associating a customer id to its location as (latitute, longitude)
-    :dc: dict associating a distribution center id to its (latitute, longitude)
-    :dc_lb: dc_lb[k] -> lower bound for distribution center k [not used]
-    :dc_ub: dc_ub[k] -> upper bound for distribution center k
-    :plnt: dict associating a plant id to its (latitute, longitude)
-    :plnt_ub: plnt_ub[k] -> upper bound for plant k
-    :demand: demand[k,p] -> units of `p` demanded by customer `k`
-    :tp_cost: tp_cost[i,j] -> unit transportation cost from plant `i` to dc `j`
-    :del_cost: tp_cost[i,j] -> unit delivery cost from dc `i` to customer `j`
-    :dc_fc: fixed cost for opening a dc
-    :dc_vc: unit (variable) cost for operating a dc
-    :dc_num: (maximum) number of distribution centers to open
-    """
-    prod = set(weight.keys())
-    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prod if plnt_ub.get((i, p), 0) > 0)
-    dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
-
-    model = Model()
-    x, y = {}, {}
-    for (i, j, p) in plnt_to_dc | dc_to_cust:
-        x[i, j, p] = model.addVar(vtype='C', name=f'x[{i},{j},{p}]')
-
-    slack = {}
-    for (k, p) in demand:
-        if demand[k, p] > 0.:
-            slack[k, p] = model.addVar(vtype="C", name=f"slack[{k},{p}]")
-
-    for j in dc:
-        y[j] = model.addVar(vtype='B', name=f'y[{j}]')
-
-    model.update()
-
-    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, DC_LB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}, {}
-
-    for k in tqdm(cust):
-        for p in prod:
-            if demand[k, p] > 0.:
-                Cust_Demand_Cons[k, p] = model.addConstr(
-                    quicksum(x[j, k, p] for j in dc if (j, k, p) in dc_to_cust) + slack[k, p]
-                    ==
-                    demand[k, p],
-                    name=f'Cust_Demand_Cons[{k},{p}]'
-                )
-    for j in tqdm(dc):
-        for p in prod:
-            DC_Flow_Cons[j, p] = model.addConstr(
-                quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc)
-                ==
-                quicksum(x[j, k, p] for k in cust if (j, k, p) in dc_to_cust),
-                name=f'DC_Flow_Cons[{j},{p}]'
-            )
-    for (j, k, p) in dc_to_cust:
-        DC_Strong_Cons[j, k, p] = model.addConstr(
-            x[j, k, p]
-            <=
-            demand[k, p] * y[j],
-            name=f'DC_Strong_Cons[{j},{k},{p}]'
-        )
-
-    for j in tqdm(dc):
-        DC_UB_Cons[j] = model.addConstr(
-            dc_ub[j] * y[j]
-            >=
-            quicksum(x[i, j, p] for i in plnt for p in prod if (i, j, p) in plnt_to_dc),
-            name=f'DC_UB_Cons[{j}]'
-        )
-
-    # for j in tqdm(dc):
-    #     DC_LB_Cons[j] = model.addConstr(
-    #         dc_lb[j] * y[j]
-    #         <=
-    #         quicksum(x[i,j,p] for i in plnt for p o prod if (i,j,p) in plnt_to_dc),
-    #         name=f'DC_LB_Cons[{j}]'
-    #     )
-
-    for i in tqdm(plnt):
-        for p in prod:
-            Plnt_UB_Cons[i, p] = model.addConstr(
-                plnt_ub[i, p]
-                >=
-                quicksum(x[i, j, p] for j in dc if (i, j, p) in plnt_to_dc),
-                name=f'Plnt_UB_Cons[{i},{p}]'
-            )
-
-    DC_Num_Cons = model.addConstr(
-        quicksum(y[j] for j in dc)
-        <=
-        dc_num,
-        name='DC_Num_Cons'
-    )
-
-    model.update()
-
-    model.setObjective(
-        quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(weight[p] * del_cost[j, k] * x[j, k, p] for (j, k, p) in dc_to_cust) +
-        quicksum(dc_fc[j] * y[j] for j in dc) +
-        quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(999999 * slack[k, p] for k in cust for p in prod if demand[k, p] > 0.)
-    )
-    model.update()
-    model.__data = x, y
-    return model
-
-
-def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
-    """
-    Logistics network design, single source
-
-    Gurobi model for single-source LND
-
-    :rtype: object of class `Model`, as defined in `gurobipy`
-    :weight: weight[p] -> unit weight for product `p`
-    :cust: dict associating a customer id to its location as (latitute, longitude)
-    :dc: dict associating a distribution center id to its (latitute, longitude)
-    :dc_lb: dc_lb[k] -> lower bound for distribution center k [not used]
-    :dc_ub: dc_ub[k] -> upper bound for distribution center k
-    :plnt: dict associating a plant id to its (latitute, longitude)
-    :plnt_ub: plnt_ub[k] -> upper bound for plant k
-    :demand: demand[k,p] -> units of `p` demanded by customer `k`
-    :tp_cost: tp_cost[i,j] -> unit transportation cost from plant `i` to dc `j`
-    :del_cost: tp_cost[i,j] -> unit delivery cost from dc `i` to customer `j`
-    :dc_fc: fixed cost for opening a dc
-    :dc_vc: unit (variable) cost for operating a dc
-    :dc_num: (maximum) number of distribution centers to open
-    """
-    prod = set(weight.keys())
-    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prod if plnt_ub.get((i, p), 0) > 0)
-    dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
-
-    model = Model()
     x, y = {}, {}
     z = {}
     for (i, j, p) in plnt_to_dc:
@@ -453,12 +303,14 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
 
     Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, DC_LB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}, {}
 
+    #Custumor demand constraint
     for k in cust:
         Cust_Demand_Cons[k] = model.addConstr(
             quicksum(z[j, k] for j in dc) + slack[k]
             == 1,
             name=f'Cust_Demand_Cons[{k}]'
         )
+    # Flow conservation constraint
     for j in dc:
         for p in prod:
             DC_Flow_Cons[j, p] = model.addConstr(
@@ -468,6 +320,9 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
                 name=f'DC_Flow_Cons[{j},{p}]'
             )
 
+
+
+    # Strong activation constraint
     for j in dc:
         for k in cust:
             DC_Strong_Cons[j, k] = model.addConstr(
@@ -477,6 +332,8 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
                 name=f'DC_Strong_Cons[{j},{k}]'
             )
 
+
+    # Upper bound constraint for distribution centers
     for j in tqdm(dc):
         DC_UB_Cons[j] = model.addConstr(
             dc_ub[j] * y[j]
@@ -485,14 +342,8 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
             name=f'DC_UB_Cons[{j}]'
         )
 
-    # for j in tqdm(dc):
-    #    DC_LB_Cons[j] = model.addConstr(
-    #        dc_lb[j] * y[j]
-    #        <=
-    #        quicksum(x[i,j,p] for i in plnt if (i,j,p) in plnt_to_dc),
-    #        name=f'DC_LB_Cons[{j}]'
-    #   )
 
+    # Upper bound constraint for plants
     for i in tqdm(plnt):
         for p in prod:
             Plnt_UB_Cons[i, p] = model.addConstr(
@@ -502,6 +353,7 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
                 name=f'Plnt_UB_Cons[{i},{p}]'
             )
 
+    # Constraint on the number of distribution centers to open
     DC_Num_Cons = model.addConstr(
         quicksum(y[j] for j in dc)
         <=
@@ -512,6 +364,8 @@ def lnd_ss(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, d
     model.update()
 
     total_demand = {k: sum(demand[k, p] for p in prod) for k in cust}
+
+    #objectivee function
     model.setObjective(
         quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
         quicksum(weight[p] * del_cost[j, k] * total_demand[k] * z[j, k] for j in dc for k in cust) +
