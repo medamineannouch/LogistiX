@@ -7,7 +7,7 @@ import pandas as pd
 import random
 import numpy as np
 
-def read_data(filename="../data/data.xlsx"):
+def read_data(filename="../data/data_ma.xlsx"):
     df = pd.read_excel(filename,index_col="zip")
     df.index = df.index.map(str)
     return df
@@ -90,7 +90,7 @@ def generate_customer_names(locations):
         - dict: Dictionary mapping location IDs to customer names.
 
     """
-    return {z: f"C-{locations['province'][z]}{locations['town'][z]}{locations['address'][z]}" for z in
+    return {z: f"C-{str(locations['province'][z])}{str(locations['town'][z])}{str(locations['address'][z])}" for z in
             locations['address'].keys()}
 
 
@@ -108,7 +108,6 @@ def generate_demand(cust, prods):
     """
     return {(c, p): random.randint(10, 100) for c in cust for p in prods}
 
-    plnt_to_dc = set((i,j,p) for i in plnt for j in dc for p in prod if plnt_ub.get((i,p),0) > 0)
 
 def generate_distribution_centers(cust_len,locations):
     """
