@@ -49,10 +49,6 @@ class TestInstances(unittest.TestCase):
             print("Selected", len(cluster_dc), "dc's out of", len(dc.keys()), "possible positions")
 
 
-        """
-        Unit tests for the solving functions in lnd_ms and lnd_ss.
-        """
-
     def setUp(self):
         """
         Set up any common variables or configurations needed for the tests.
@@ -107,6 +103,47 @@ class TestInstances(unittest.TestCase):
                 for product in prods:
                     self.assertIn((customer, product), demand, f"Missing entry for ({customer}, {product}) in 'demand'")
 
+    def test_preclusterer_optimizer(self):
+        """
+        Test clustering a set of potential dc's, then optimizing the location of a small number of them
+        """
+        TIME_LIM = 300  # allow gurobi to use 5 minutes
+
+        models = {
+            "multiple source": multiple_src,
+            "single source": single_src
+        }
+
+        for (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
+            # prepare costs for optimization part
+            (tp_cost, del_cost, dc_fc, dc_vc) = mk_costs(plnt, dc, cust)
+
+            # clustering part
+            prods = weight.keys()
+            n_clusters = (10 + len(dc)) // 5
+            cluster_dc = pre_clusterer.preclustering(cust, dc, prods, demand, n_clusters)
+
+            # optimization part
+            start = time.process_time()
+            dc_num = (90 + len(cluster_dc)) // 50
+
+            for k in models:
+                print(f"*** new instance, {len(plnt)} plants + {len(dc)} dc's + {len(cust)} customers ***")
+                print(f"***** dc's clustered into {len(cluster_dc)} groups, for choosing {dc_num} dc's")
+                print(f"* using {k} model *")
+                model = models[k](weight, cust, cluster_dc, dc_ub, plnt, plnt_ub,
+                                  demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num)
+                model.setParam('TimeLimit', TIME_LIM)
+                model.optimize()
+
+                EPS = 1.e-6
+                for x in model.getVars():
+                    if x.X > EPS:
+                        print(x.varName, x.X)
+
+                end = time.process_time()
+                print(f"solving MIP used {end - start} seconds")
+                print()
 
 
 if __name__ == '__main__':
