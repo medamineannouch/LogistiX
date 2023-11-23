@@ -145,9 +145,11 @@ def generate_plants(nplant, prod_demand,location):
           (plant, plant_ub)
 
     """
+    print(f"generating {nplant}")
     plant = {z: (location['latitude'][z], location['longitude'][z]) for z in location['address'].keys()}
     plant_ub = {(z, p): (prod_demand[p] / nplant + 1000) for z in location['address'].keys() for p in
                 prod_demand.keys()}
+    print("generate_plants function : ",len(plant))
     return plant, plant_ub
 
 
@@ -168,22 +170,27 @@ def mk_instance(df, nplant, nd, nc, nprod, seed):
           distribution center locations, lower bounds, upper bounds, demand , plant upper bounds and name
 
     """
+    print("Number of plants (mk_instance begining):", nplant)
+    print("Number of customers (mk_instance begining ):", nc)
     random.seed(seed)
     rnd_stat = np.random.RandomState(seed=seed)
 
     prods, weight = generate_products(nprod)
 
     locations_cust = generate_locations(df, nc, rnd_stat)
+    locations_plant=generate_locations(df,nplant,rnd_stat)
     cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in
             locations_cust['address'].keys()}
 
     demand = generate_demand(cust, prods)
     name = generate_customer_names(locations_cust)
-    dc, dc_lb, dc_ub = generate_distribution_centers(  len(cust),locations_cust)
+    dc, dc_lb, dc_ub = generate_distribution_centers( len(cust),locations_cust)
 
-    plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_cust)
+    plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_plant)
+    print("Number of plants (mk_instance at the end ):", len(plant))
+    print("Number of customers (mk_instance at the end ):", len(cust))
 
-    return prods, weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
+    return  weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
 
 
 def mk_instances():
@@ -196,10 +203,10 @@ def mk_instances():
 
     """
     df = read_data()
-    n_plants = 3
-    n_prods = 5
+    n_plants = 2
+    n_prods = 3
     seeds = range(1, 11)
-    for n_custs in [3,10]:
+    for n_custs in [10]:
         n_dcs = n_custs
         for seed in seeds:
 
