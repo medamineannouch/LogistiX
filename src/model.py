@@ -1,7 +1,9 @@
 from geopy.distance import great_circle as distance
 from gurobipy import *
 from tqdm import tqdm
-
+import dash
+from dash import html
+from dash import dash_table
 def mk_costs(plnt, dc, cust):
     """
         Instantiate costs for a given set of plants, distribution centers, and customers.
@@ -27,101 +29,8 @@ def mk_costs(plnt, dc, cust):
 
 
 
-def single_src(weight, cust, dc, dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
 
-    prod = set(weight.keys())
-    plnt_to_dc = set((i, j, p) for i in plnt for j in dc for p in prod if plnt_ub.get((i, p), 0) > 0)
-    dc_to_cust = set((j, k, p) for j in dc for k in cust for p in prod if demand[k, p] > 0)
 
-    model = Model()
-    x, y, z = {}, {}, {}
-    for (i, j, p) in plnt_to_dc:
-        x[i, j, p] = model.addVar(vtype='C', name=f'x[{i},{j},{p}]')
-    for j in dc:
-        for k in cust:
-            z[j, k] = model.addVar(vtype="B", name=f"z[{j},{k}]")
-
-    slack = {}
-    for k in cust:
-        slack[k] = model.addVar(vtype="C", name=f"slack[{k}]")
-
-    for j in dc:
-        y[j] = model.addVar(vtype='B', name=f'y[{j}]')
-
-    model.update()
-
-    #constraints
-    Cust_Demand_Cons, DC_Flow_Cons, DC_Strong_Cons, DC_UB_Cons, Plnt_UB_Cons = {}, {}, {}, {}, {}
-
-    # Customer demand constraint
-    for k in cust:
-        Cust_Demand_Cons[k] = model.addConstr(
-            quicksum(z[j, k] for j in dc) + slack[k]
-            == 1,
-            name=f'Cust_Demand_Cons[{k}]'
-        )
-
-    for j in dc:
-        for p in prod:
-            DC_Flow_Cons[j, p] = model.addConstr(
-                quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc)
-                ==
-                quicksum(demand[k, p] * z[j, k] for k in cust),
-                name=f'DC_Flow_Cons[{j},{p}]'
-            )
-
-    for j in dc:
-        for k in cust:
-            DC_Strong_Cons[j, k] = model.addConstr(
-                z[j, k]
-                <=
-                y[j],
-                name=f'DC_Strong_Cons[{j},{k}]'
-            )
-
-    for j in dc:
-        DC_UB_Cons[j] = model.addConstr(
-            dc_ub[j] * y[j]
-            >=
-            quicksum(x[i, j, p] for i in plnt if (i, j, p) in plnt_to_dc),
-            name=f'DC_UB_Cons[{j}]'
-        )
-
-    for i in plnt:
-        for p in prod:
-            Plnt_UB_Cons[i, p] = model.addConstr(
-                plnt_ub[i, p]
-                >=
-                quicksum(x[i, j, p] for j in dc if (i, j, p) in plnt_to_dc),
-                name=f'Plnt_UB_Cons[{i},{p}]'
-            )
-
-    DC_Num_Cons = model.addConstr(
-        quicksum(y[j] for j in dc)
-        <=
-        dc_num,
-        name='DC_Num_Cons'
-    )
-
-    model.update()
-
-    # Calculate total demand for each customer
-    total_demand = {k: sum(demand[k, p] for p in prod) for k in cust}
-
-    # Objective function
-    model.setObjective(
-        quicksum(weight[p] * tp_cost[i, j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(weight[p] * del_cost[j, k] * total_demand[k] * z[j, k] for j in dc for k in cust) +
-        quicksum(dc_fc[j] * y[j] for j in dc) +
-        quicksum(dc_vc[j] * x[i, j, p] for (i, j, p) in plnt_to_dc) +
-        quicksum(999999 * slack[k] for k in cust),
-        GRB.MINIMIZE
-    )
-    model.update()
-
-    # Store decision variables in the model for later access
-    model.__data = x, y
-    return model
 
 
 def multiple_src(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
@@ -249,7 +158,7 @@ def multiple_src(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_c
     return model
 
 
-def single_source(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
+def single_src(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_cost, dc_fc, dc_vc, dc_num):
     """
         Logistics network design, single source.
 
@@ -376,4 +285,5 @@ def single_source(weight, cust, dc,  dc_ub, plnt, plnt_ub, demand, tp_cost, del_
     model.update()
     model.__data = x, y
     return model
+
 
