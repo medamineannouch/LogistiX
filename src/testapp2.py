@@ -123,7 +123,34 @@ def build_banner():
     )
 
 
-
+def build_tabs():
+    return html.Div(
+        id="tabs",
+        className="tabs",
+        children=[
+            dcc.Tabs(
+                id="app-tabs",
+                value="tab1",
+                className="custom-tabs",
+                children=[
+                    dcc.Tab(
+                        id="Specs-tab",
+                        label="Data Source Settings",
+                        value="tab1",
+                        className="custom-tab",
+                        selected_className="custom-tab--selected",
+                    ),
+                    dcc.Tab(
+                        id="Control-chart-tab",
+                        label="Optimization Dashboard",
+                        value="tab2",
+                        className="custom-tab",
+                        selected_className="custom-tab--selected",
+                    ),
+                ],
+            )
+        ],
+    )
 
 
 
@@ -198,7 +225,6 @@ def build_tab_1():
 
 def build_tab_2():
     return [
-        # Manually select data sources
         html.Div(
             id="status-container",
             className='twelve columns',
@@ -207,7 +233,7 @@ def build_tab_2():
                     id="quick-stats",
                     className="five columns",
                     children=[
-                        build_instructions()
+                        build_instructions(), # New container for the results table
                     ],
                 ),
                 html.Div(
@@ -247,7 +273,7 @@ def generate_modal():
                                 """
                         ###### About this app
 
-                        A decision support tool for network logistics design / facility location.
+                        A decision support tool for network logistics design.
 
                         ###### How to use this app
 
@@ -266,7 +292,6 @@ def generate_modal():
         ),
     )
 
-
 app.layout = html.Div(
     id="big-app-container",
     children=[
@@ -284,7 +309,40 @@ app.layout = html.Div(
         html.Div(id="output"),
         generate_modal(),
     ],
+    style={'font-family': 'Arial, sans-serif', 'background-color': '#f4f4f4'}
 )
+
+# New styles for the banner
+app.css.append_css({
+    'external_url': (
+        'https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css'
+    )
+})
+
+# Style for the banner container
+banner_container_style = {
+    'display': 'flex',
+    'justify-content': 'space-between',
+    'padding': '20px',
+    'background-color': '#1f2c56',
+    'color': 'white',
+}
+
+# Style for the banner text
+banner_text_style = {
+    'flex': '2',
+    'margin-right': '20px',
+}
+
+# Style for the Learn More button
+learn_more_button_style = {
+    'flex': '1',
+}
+
+# Apply styles to the banner components
+app.layout['banner'].style = banner_container_style
+app.layout['banner-text'].style = banner_text_style
+app.layout['learn-more-button'].style = learn_more_button_style
 
 
 def build_instructions():
@@ -383,107 +441,6 @@ def build_graph():
         ],
     )
 
-def build_combined_tab_content():
-    return [
-        # Manually select data sources
-        html.Div(
-            id="set-specs-intro-container",
-            # className='twelve columns',
-            children=html.P(
-                # "Specify data sources and access credentials here."
-                "Specify parameters for data preparation here."
-            ),
-        ),
-        html.Div(
-            id="settings-menu",
-            children=[
-                html.Div(
-                    id="input-sources",
-                    # className='five columns',
-                    children=access_children,
-                ),
-                html.Div(
-                    className='one column',
-                ),
-                html.Div(
-                    id="current-data-summary",
-                    # className='five columns',
-                    children=[
-                        dcc.Loading(
-                            id="loading-2",
-                            children=[html.Div([html.Div(id="loading-output-2")])],
-                            type="circle",
-                        ),
-                        html.Label(id="products-summary"),
-                    ],
-                ),
-                html.Div(
-                    id="value-setter-menu",
-                    # className='six columns',
-                    children=[
-                        html.Div(id="value-setter-panel"),
-                        html.Br(),
-                        html.Div(
-                            id="button-div",
-                            children=[
-                                html.Button("Update", id="value-setter-set-btn"),
-                            ],
-                        ),
-                        html.Div(
-                            id="value-setter-view-output", className="output-datatable"
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        html.Div(
-            id="status-container",
-            className='twelve columns',
-            children=[
-                html.Div(
-                    id="quick-stats",
-                    className="five columns",
-                    children=[
-                        build_instructions()
-                    ],
-                ),
-                html.Div(
-                    id="# commentl-graph",
-                    className="seven columns",
-                    children=[
-                        build_graph(),
-                    ],
-                ),
-            ],
-        ),
-    ]
-
-
-
-def build_tabs():
-    return html.Div(
-        id="tabs",
-        className="tabs",
-        children=[
-            dcc.Tabs(
-                id="app-tabs",
-                value="combined",
-                className="custom-tabs",
-                children=[
-                    dcc.Tab(
-                        id="Combined-tab",
-                        label="Combined Tab",  # Adjust the label as needed
-                        value="combined",
-                        className="custom-tab",
-                        selected_className="custom-tab--selected",
-                        children=[
-                            build_combined_tab_content(),
-                        ],
-                    ),
-                ],
-            )
-        ],
-    )
 
 
 @app.callback(
@@ -633,7 +590,7 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
         mapbox=dict(
             style="open-street-map",  # Specify OpenStreetMap as the tile source
             center=dict(lat=0, lon=0),  # Center of the map
-            zoom=2,  # Initial zoom level
+            zoom=5,  # Initial zoom level
         ),
         legend=dict(
             bgcolor="#1f2c56",
@@ -644,7 +601,7 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
             yanchor="bottom",
         ),
     )
-    pnts = [
+    results = [
         go.Scattermapbox(
             lat=p_lats,
             lon=p_lons,
@@ -652,8 +609,6 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
             mode="markers",
             marker={"color": "black", "size": 11, "opacity": .9},
             name="Plant",
-            # selectedpoints=selected_index,
-            # customdata=text,
         ),
         go.Scattermapbox(
             lat=lats,
@@ -662,8 +617,6 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
             mode="markers",
             marker={"color": "white", "size": 6, "opacity": 1.},
             name="Customer",
-            # selectedpoints=selected_index,
-            # customdata=text,
         ),
         go.Scattermapbox(
             lat=dc_lats,
@@ -672,37 +625,22 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
             mode="markers",
             marker={"color": "green", "size": 8, "opacity": 0.9},
             name="DC",
-            # selectedpoints=selected_index,
-            # customdata=text,
-        ),
-        go.Scattermapbox(
-            lat=cdc_lats,
-            lon=cdc_lons,
-            text=[i for i in cluster_dc],
-            mode="markers",
-            marker={"color": "red", "size": 9, "opacity": 0.9},
-            name="DC-clustered",
-            # selectedpoints=selected_index,
-            # customdata=text,
         ),
         go.Scattermapbox(
             lat=odc_lats,
             lon=odc_lons,
             text=[i for i in opt_dc],
             mode="markers",
-            marker={"color": "yellow", "size": 10, "opacity": 0.9},
+            marker={"color": "red", "size": 10, "opacity": 0.9},
             name="Optimum DCs",
-            # selectedpoints=selected_index,
-            # customdata=text,
         ),
     ]
 
 
-    return {"data": pnts, "layout": layout}, table_data
+    return {"data": results, "layout": layout}, table_data
 
 
 
-# ======= Callbacks for modal popup ======= [jpp OK]
 @app.callback(
     Output("markdown", "style"),
     [Input("learn-more-button", "n_clicks"), Input("markdown_close", "n_clicks")],
