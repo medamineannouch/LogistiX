@@ -2,15 +2,17 @@ import pathlib
 import statistics
 
 import dash
+import pandas as pd
+from dash.dash_table.Format import Format
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 import dash_daq as daq
 from dash.exceptions import PreventUpdate
-from dash import html
+from dash import html, dash_table
 from dash import dcc
 from instance import mk_instance, read_data
 from pre_clusterer import preclustering
-from model import multiple_src, single_src, mk_costs
+from model import multiple_src, single_src, mk_costs, multiple_src2
 
 
 def jsonize(data):
@@ -83,7 +85,7 @@ def solve(data, cluster_dc, dc_num, model="multiple source"):
 
     dcs = [i for i in cluster_dc if y[i].X > .5]
     print("solution:", dcs)
-    return dcs
+    return dcs,x, y
 
 
 app = dash.Dash(
@@ -107,8 +109,7 @@ def build_banner():
                 id="banner-text",
                 children=[
                     html.H5("Facility location module"),
-                    html.P("Optimization for Supply Chain Management, "
-                           "Tokyo University of Marine Science and Technology"),
+                    html.P("Optimization for Supply Chain Management, "),
                 ],
             ),
             html.Div(
@@ -122,34 +123,7 @@ def build_banner():
     )
 
 
-def build_tabs():
-    return html.Div(
-        id="tabs",
-        className="tabs",
-        children=[
-            dcc.Tabs(
-                id="app-tabs",
-                value="tab1",
-                className="custom-tabs",
-                children=[
-                    dcc.Tab(
-                        id="Specs-tab",
-                        label="Data Source Settings",
-                        value="tab1",
-                        className="custom-tab",
-                        selected_className="custom-tab--selected",
-                    ),
-                    dcc.Tab(
-                        id="Control-chart-tab",
-                        label="Optimization Dashboard",
-                        value="tab2",
-                        className="custom-tab",
-                        selected_className="custom-tab--selected",
-                    ),
-                ],
-            )
-        ],
-    )
+
 
 
 
@@ -347,6 +321,25 @@ def build_instructions():
         ],
     )
 
+def build_table():
+    return html.Div(
+        id="results-table-container",
+        children=[
+            html.P("Results Table", className="table-title"),
+            dash_table.DataTable(
+                id="results-table",
+                columns=[
+                    {"name": "Customer", "id": "Customer"},
+                    {"name": "Distribution Center", "id": "Distribution Center"},
+                    {"name": "Product", "id": "Product"},
+
+                ],
+                style_table={"height": "400px", "overflowY": "auto"},
+                style_header={"backgroundColor": "#1f2c56", "color": "white"},
+                style_cell={"textAlign": "left"},
+            ),
+        ],
+    )
 
 def build_graph():
     return html.Div(
@@ -368,11 +361,127 @@ def build_graph():
                     ),
                 ],
             ),
-            # END
+
             html.Div(
                 id="ternary-map-container",
-                children="",
+                children=[
+                    html.P("Results Table", className="table-title"),
+                    dash_table.DataTable(
+                        id="results-table",
+                        columns=[
+                            {"name": "Distribution Center", "id": "Distribution Center"},
+                            {"name": "Customer", "id": "Customer"},
+                            {"name": "Product", "id": "Product"},
+
+                        ],
+                        style_table={"height": "400px", "overflowY": "auto"},
+                        style_header={"backgroundColor": "#1f2c56", "color": "white"},
+                        style_cell={"textAlign": "left"},
+                    ),
+                ],
+            )
+        ],
+    )
+
+def build_combined_tab_content():
+    return [
+        # Manually select data sources
+        html.Div(
+            id="set-specs-intro-container",
+            # className='twelve columns',
+            children=html.P(
+                # "Specify data sources and access credentials here."
+                "Specify parameters for data preparation here."
             ),
+        ),
+        html.Div(
+            id="settings-menu",
+            children=[
+                html.Div(
+                    id="input-sources",
+                    # className='five columns',
+                    children=access_children,
+                ),
+                html.Div(
+                    className='one column',
+                ),
+                html.Div(
+                    id="current-data-summary",
+                    # className='five columns',
+                    children=[
+                        dcc.Loading(
+                            id="loading-2",
+                            children=[html.Div([html.Div(id="loading-output-2")])],
+                            type="circle",
+                        ),
+                        html.Label(id="products-summary"),
+                    ],
+                ),
+                html.Div(
+                    id="value-setter-menu",
+                    # className='six columns',
+                    children=[
+                        html.Div(id="value-setter-panel"),
+                        html.Br(),
+                        html.Div(
+                            id="button-div",
+                            children=[
+                                html.Button("Update", id="value-setter-set-btn"),
+                            ],
+                        ),
+                        html.Div(
+                            id="value-setter-view-output", className="output-datatable"
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        html.Div(
+            id="status-container",
+            className='twelve columns',
+            children=[
+                html.Div(
+                    id="quick-stats",
+                    className="five columns",
+                    children=[
+                        build_instructions()
+                    ],
+                ),
+                html.Div(
+                    id="# commentl-graph",
+                    className="seven columns",
+                    children=[
+                        build_graph(),
+                    ],
+                ),
+            ],
+        ),
+    ]
+
+
+
+def build_tabs():
+    return html.Div(
+        id="tabs",
+        className="tabs",
+        children=[
+            dcc.Tabs(
+                id="app-tabs",
+                value="combined",
+                className="custom-tabs",
+                children=[
+                    dcc.Tab(
+                        id="Combined-tab",
+                        label="Combined Tab",  # Adjust the label as needed
+                        value="combined",
+                        className="custom-tab",
+                        selected_className="custom-tab--selected",
+                        children=[
+                            build_combined_tab_content(),
+                        ],
+                    ),
+                ],
+            )
         ],
     )
 
@@ -474,7 +583,7 @@ def update_summary_2(data):
 
 
 @app.callback(
-    Output("dc-map", "figure"),
+    Output("dc-map", "figure"), Output("results-table", "data"),
     [Input("update-DCs", "n_clicks")],
     [State("data-store", "data"), State("nclusters", "value"), State("ndcs", "value")],
 )
@@ -501,10 +610,18 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
 
     # optimization part
     print(f'optimizing {n_dcs}...')
-    opt_dc = solve(data, cluster_dc, n_dcs)
+    opt_dc,x, y= solve(data, cluster_dc, n_dcs)
     odc_lats, odc_lons = zip(*[dc[i] for i in opt_dc])
     print("opt_dc:", opt_dc)
     print("done.")
+
+
+
+    table_data = []
+    for (i, j, p), var in x.items():
+        table_data.append({"Customer": j, "Distribution Center": i, "Product":p})
+
+    ######################
 
     layout = go.Layout(
         clickmode="event+select",
@@ -579,7 +696,9 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
             # customdata=text,
         ),
     ]
-    return {"data": pnts, "layout": layout}
+
+
+    return {"data": pnts, "layout": layout}, table_data
 
 
 
@@ -597,6 +716,7 @@ def update_click_output(button_click, close_click):
             return {"display": "block"}
 
     return {"display": "none"}
+
 
 
 # Running the server
