@@ -4,7 +4,7 @@ import time
 import pre_clusterer
 from geopy.distance import great_circle as distance
 from gurobipy import Model, GRB
-from model import multiple_src, single_src, mk_costs
+from model import multiple_src, single_src, mk_costs,multiple_src2
 
 class TestInstances(unittest.TestCase):
     def test_location_sample(self):
@@ -23,7 +23,7 @@ class TestInstances(unittest.TestCase):
                         break
 
     def test_instance_generation(self):
-        for (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
+        for (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
             for dic in [cust, plnt, dc]:
                 nout = 0
 
@@ -39,7 +39,7 @@ class TestInstances(unittest.TestCase):
         """
         Test optimizing the location of a small number of dc's from set of candidates
         """
-        for (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
+        for (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
             start = time.process_time()
             prods = weight.keys()
             n_clusters = (10 + len(dc)) // 5
@@ -65,7 +65,7 @@ class TestInstances(unittest.TestCase):
         }
 
         for k in models:
-            for (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
+            for (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
                 print(f"* using {k} model *")
                 print(f"*** new instance, {len(plnt)} plants + {len(dc)} dc's + {len(cust)} customers ***")
                 start = time.process_time()
@@ -91,8 +91,8 @@ class TestInstances(unittest.TestCase):
     def test_demand_keys(self):
 
         for inst in instance.mk_instances():
-            prods, weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name = inst
-
+            weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name = inst
+            prods= weight.keys()
             # Ensure that all keys in the 'demand' dictionary have corresponding entries in 'cust' and 'prods'
             for (customer, product) in demand.keys():
                 self.assertIn(customer, cust, f"Customer {customer} not found in 'cust' dictionary")
@@ -114,7 +114,7 @@ class TestInstances(unittest.TestCase):
             "single source": single_src
         }
 
-        for (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
+        for (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) in instance.mk_instances():
             # prepare costs for optimization part
             (tp_cost, del_cost, dc_fc, dc_vc) = mk_costs(plnt, dc, cust)
 

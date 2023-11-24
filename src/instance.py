@@ -12,6 +12,19 @@ def read_data(filename="../data/data_ma.xlsx"):
     df.index = df.index.map(str)
     return df
 
+def read_plant_data(filename="../data/data_ma.xlsx"):
+    df = pd.read_excel(filename,index_col="zip")
+    df.index = df.index.map(str)
+    return df
+def read_customers_data(filename="../data/data_ma.xlsx"):
+    df = pd.read_excel(filename,index_col="zip")
+    df.index = df.index.map(str)
+    return df
+def read_dc_data(filename="../data/data_ma.xlsx"):
+    df = pd.read_excel(filename,index_col="zip")
+    df.index = df.index.map(str)
+    return df
+
 
 def sample_locations(df, n_locations, rnd_stat):
     """
@@ -153,7 +166,7 @@ def generate_plants(nplant, prod_demand,location):
     return plant, plant_ub
 
 
-def mk_instance(df, nplant, nd, nc, nprod, seed):
+def mk_instance_v2(df, nplant, nd, nc, nprod, seed):
     """
         Create an instance of the logistics network design problem.
 
@@ -181,10 +194,11 @@ def mk_instance(df, nplant, nd, nc, nprod, seed):
     locations_plant=generate_locations(df,nplant,rnd_stat)
     cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in
             locations_cust['address'].keys()}
+    locations_dc=generate_locations(df,nd,rnd_stat)
 
     demand = generate_demand(cust, prods)
     name = generate_customer_names(locations_cust)
-    dc, dc_lb, dc_ub = generate_distribution_centers( len(cust),locations_cust)
+    dc, dc_lb, dc_ub = generate_distribution_centers( len(cust),locations_dc)
 
     plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_plant)
     print("Number of plants (mk_instance at the end ):", len(plant))
@@ -192,6 +206,47 @@ def mk_instance(df, nplant, nd, nc, nprod, seed):
 
     return  weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
 
+def mk_instance(df_plant,df_cust,df_dc, nplant, nd, nc, nprod, seed):
+    """
+        Create an instance of the logistics network design problem.
+
+        Parameters:
+        - df_plant (pd.DataFrame): DataFrame with plants location information .
+        - df_cust (pd.DataFrame): DataFrame with customers location information.
+        - df_dc (pd.DataFrame): DataFrame with distribution centers location information.
+        - nplant (int): Number of plants.
+        - nd (int): Number of distribution centers.
+        - nc (int): Number of customers.
+        - nprod (int): Number of products.
+        - seed (int): Seed for randomization.
+
+        Returns:
+        - tuple: Tuple containing information for weight, customer locations, plant locations,
+          distribution center locations, lower bounds, upper bounds, demand , plant upper bounds and name
+
+    """
+    print("Number of plants (mk_instance begining):", nplant)
+    print("Number of customers (mk_instance begining ):", nc)
+    random.seed(seed)
+    rnd_stat = np.random.RandomState(seed=seed)
+
+    prods, weight = generate_products(nprod)
+
+    locations_cust = generate_locations(df_cust, nc, rnd_stat)
+    locations_plant=generate_locations(df_plant,nplant,rnd_stat)
+    cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in
+            locations_cust['address'].keys()}
+    locations_dc=generate_locations(df_dc,nd,rnd_stat)
+
+    demand = generate_demand(cust, prods)
+    name = generate_customer_names(locations_cust)
+    dc, dc_lb, dc_ub = generate_distribution_centers( len(cust),locations_dc)
+
+    plant, plant_ub = generate_plants( nplant, {p: sum(demand[c, p] for c in cust) for p in prods},locations_plant)
+    print("Number of plants (mk_instance at the end ):", len(plant))
+    print("Number of customers (mk_instance at the end ):", len(cust))
+
+    return  weight, cust, plant, dc, dc_lb, dc_ub, demand, plant_ub, name
 
 def mk_instances():
     """
@@ -202,7 +257,9 @@ def mk_instances():
           distribution center locations, lower bounds, upper bounds, demand, plant upper bounds, and customer names.
 
     """
-    df = read_data()
+    df_plant= read_plant_data()
+    df_cust=read_customers_data()
+    df_dc = read_dc_data()
     n_plants = 2
     n_prods = 3
     seeds = range(1, 11)
@@ -210,9 +267,9 @@ def mk_instances():
         n_dcs = n_custs
         for seed in seeds:
 
-            (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = \
-                mk_instance(df, n_plants, n_dcs, n_custs, n_prods, seed)
-            yield (prods,weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name)
+            (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = \
+                mk_instance(df_plant,df_cust,df_dc, n_plants, n_dcs, n_custs, n_prods, seed)
+            yield (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name)
 
 
 
