@@ -10,9 +10,9 @@ import dash_daq as daq
 from dash.exceptions import PreventUpdate
 from dash import html, dash_table
 from dash import dcc
-from instance import mk_instance, read_data, read_dc_data,read_plant_data,read_customers_data
+from instance import mk_instance,  read_dc_data,read_plant_data,read_customers_data
 from pre_clusterer import preclustering
-from model import multiple_src, single_src, mk_costs, multiple_src2
+from model import multiple_src, single_src, mk_costs
 
 
 def jsonize(data):

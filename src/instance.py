@@ -2,7 +2,7 @@
     for different scenarios to evaluate and test the optimization algorithm"""
 
 
-import unittest
+
 import pandas as pd
 import random
 import numpy as np
@@ -162,7 +162,7 @@ def generate_plants(nplant, prod_demand,location):
     plant = {z: (location['latitude'][z], location['longitude'][z]) for z in location['address'].keys()}
     plant_ub = {(z, p): (prod_demand[p] / nplant + 1000) for z in location['address'].keys() for p in
                 prod_demand.keys()}
-    print("generate_plants function : ",len(plant))
+    print("generate_plants function : ", len(plant))
     return plant, plant_ub
 
 
@@ -192,8 +192,7 @@ def mk_instance_v2(df, nplant, nd, nc, nprod, seed):
 
     locations_cust = generate_locations(df, nc, rnd_stat)
     locations_plant=generate_locations(df,nplant,rnd_stat)
-    cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in
-            locations_cust['address'].keys()}
+    cust = {z: (locations_cust['latitude'][z], locations_cust['longitude'][z]) for z in locations_cust['address'].keys()}
     locations_dc=generate_locations(df,nd,rnd_stat)
 
     demand = generate_demand(cust, prods)

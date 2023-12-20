@@ -12,10 +12,8 @@ a distribution center. Data are:
 See `TestClustering` below for examples of usage.
 """
 
-import random
-import unittest
+
 import numpy as np
-import pandas as pd
 from geopy.distance import great_circle as distance
 from sklearn.cluster import AgglomerativeClustering
 

@@ -10,9 +10,9 @@ import dash_daq as daq
 from dash.exceptions import PreventUpdate
 from dash import html, dash_table
 from dash import dcc
-from instance import mk_instance, read_data, read_dc_data,read_plant_data,read_customers_data
+from instance import mk_instance, read_dc_data,read_plant_data,read_customers_data
 from pre_clusterer import preclustering
-from model import multiple_src, single_src, mk_costs, multiple_src2
+from model import multiple_src, single_src, mk_costs
 
 
 def jsonize(data):
@@ -91,8 +91,7 @@ def solve(data, cluster_dc, dc_num, model="multiple source"):
 
 
 app = dash.Dash(
-    __name__,
-    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
+    __name__
 )
 
 server = app.server
@@ -110,7 +109,7 @@ def build_banner():
             html.Div(
                 id="banner-text",
                 children=[
-                    html.H5("Logistics Network Design V1"),
+                    html.H5("Logistics Network Design 1.0"),
                 ],
             ),
             html.Div(
@@ -275,16 +274,17 @@ def generate_modal():
                                 """
                         ###### About this app
 
-                        A decision support tool for network logistics design / facility location.
+                        A decision support tool for facility location.
 
                         ###### How to use this app
 
-                        To be completed:
+                        Requirements :
 
                         1. Instantiate data
                         2. Select potential places for facilities
                         3. Set parameters (number of facilities, ...)
-                        4. Optimize the problem
+                        4. Set the number of clusters and DCs to open
+                        5. Optimize the problem
                     """
                             )
                         ),
@@ -319,13 +319,13 @@ def build_instructions():
     return html.Div(
         id="left-col",
         children=[
-            html.P(className="instructions", children="Select candidates"),
+
             html.Div(
                 id="choose-nclusters",
                 children=[
-                    html.Label("Number of clusters:", className="eight columns", style={'color': 'orange'}),
+                    html.Label("Number of clusters:", className="eight columns"),
                     html.Div(
-                        daq.NumericInput(id="nclusters", className="setting-input", size=100, max=10000, value=50),
+                        daq.NumericInput(id="nclusters", className="setting-input", size=100, max=10000, value=5),
                         className="three columns", style={'color': 'green'}
                     ),
                 ],
@@ -334,7 +334,7 @@ def build_instructions():
             html.Div(
                 id="choose-ndcs",
                 children=[
-                    html.Label("Number of DCs to open:", className="eight columns", style={'color': 'orange'}),
+                    html.Label("Number of DCs to open:", className="eight columns"),
                     html.Div(
                         daq.NumericInput(id="ndcs", className="setting-input", size=100, max=10000, value=5),
                         className="three columns", style={'color': 'green'}
@@ -349,25 +349,7 @@ def build_instructions():
         ],
     )
 
-def build_table():
-    return html.Div(
-        id="results-table-container",
-        children=[
-            html.P("Results Table", className="table-title"),
-            dash_table.DataTable(
-                id="results-table",
-                columns=[
-                    {"name": "Customer", "id": "Customer"},
-                    {"name": "Distribution Center", "id": "Distribution Center"},
-                    {"name": "Product", "id": "Product"},
 
-                ],
-                style_table={"height": "400px", "overflowY": "auto"},
-                style_header={"backgroundColor": "#1f2c56", "color": "white"},
-                style_cell={"textAlign": "left"},
-            ),
-        ],
-    )
 
 def build_graph():
     return html.Div(
