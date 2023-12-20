@@ -7,6 +7,8 @@ import pandas as pd
 import random
 import numpy as np
 
+
+"""
 def read_data(filename="../data/data_ma.xlsx"):
     df = pd.read_excel(filename,index_col="zip")
     df.index = df.index.map(str)
@@ -24,7 +26,7 @@ def read_dc_data(filename="../data/data_ma.xlsx"):
     df = pd.read_excel(filename,index_col="zip")
     df.index = df.index.map(str)
     return df
-
+"""
 
 def sample_locations(df, n_locations, rnd_stat):
     """

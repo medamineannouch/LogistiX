@@ -1,6 +1,7 @@
 import pathlib
 import statistics
-
+import base64
+import io
 import dash
 import pandas as pd
 from dash.dash_table.Format import Format
@@ -10,7 +11,7 @@ import dash_daq as daq
 from dash.exceptions import PreventUpdate
 from dash import html, dash_table
 from dash import dcc
-from instance import mk_instance, read_dc_data,read_plant_data,read_customers_data
+from instance import mk_instance
 from pre_clusterer import preclustering
 from model import multiple_src, single_src, mk_costs
 
@@ -43,10 +44,19 @@ def unjsonize(data):
     return (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name, tp_cost, del_cost, dc_fc, dc_vc)
 
 
-def mk_data(n_plants=3, n_dcs=10, n_custs=100, n_prods=3, seed=1):
-    df_plant = read_plant_data()
-    df_cust = read_customers_data()
-    df_dc = read_dc_data()
+def mk_data(n_plants=3, n_dcs=10, n_custs=100, n_prods=3, seed=1,contents=None):
+    if contents is None:
+        raise PreventUpdate
+    content_type, content_string = contents.split(',')
+    decoded = io.BytesIO(base64.b64decode(content_string))
+
+    df_plant = pd.read_excel(decoded, sheet_name="plants",index_col="zip")
+    df_plant.index = df_plant.index.map(str)
+    df_cust = pd.read_excel(decoded, sheet_name="customers",index_col="zip")
+    df_cust.index = df_cust.index.map(str)
+    df_dc = pd.read_excel(decoded, sheet_name="distribution centers",index_col="zip")
+    df_dc.index = df_dc.index.map(str)
+
     print("Before mk_instance in mk_data")
     print(n_plants,n_dcs,n_custs,n_prods,seed)
     (weight, cust, plnt, dc, dc_lb, dc_ub, demand, plnt_ub, name) = mk_instance(df_plant,df_cust,df_dc, n_plants, n_dcs, n_custs, n_prods, seed)
@@ -178,13 +188,22 @@ def build_tab_1():
                 "Specify parameters for data preparation here."
             ),
         ),
+
         html.Div(
             id="settings-menu",
             children=[
                 html.Div(
                     id="input-sources",
                     # className='five columns',
-                    children=access_children,
+                    children=access_children+ [
+                        html.Br(),
+                        html.Label("Upload Locations file (format xlx) "),
+                        dcc.Upload(
+                            id='upload-data',
+                            children=html.Button('Upload File'),
+                            multiple=False
+                        ),
+                    ],
                 ),
                 html.Div(
                     className='one column',
@@ -272,7 +291,7 @@ def generate_modal():
                         children=dcc.Markdown(
                             children=(
                                 """
-                        ###### About this app
+                        #### About this app
 
                         A decision support tool for facility location.
 
@@ -331,6 +350,7 @@ def build_instructions():
                 ],
                 className="row",
             ),
+            html.Br(),
             html.Div(
                 id="choose-ndcs",
                 children=[
@@ -342,10 +362,13 @@ def build_instructions():
                 ],
                 className="row",
             ),
+            html.Br(),
             html.Div(
                 html.Button("Cluster and optimize", id="update-DCs", style={'color': 'white'}),
             ),
+            html.Br(),
             html.Label(id="products-summary-2"),
+            html.Br(),
         ],
     )
 
@@ -387,12 +410,22 @@ def build_graph():
                         style_table={"height": "400px", "overflowY": "auto"},
                         style_header={"backgroundColor": "#1f2c56", "color": "white"},
                         style_cell={"textAlign": "left"},
+                        style_data_conditional=[
+                            {
+                                "if": {"row_index": "odd"},
+                                "backgroundColor": "rgba(0, 2, 77, 0.1)",  # Lighter shade for odd rows
+                            },
+                            {
+                                "if": {"row_index": "even"},
+                                "backgroundColor": "rgba(0, 2, 77, 0.2)",  # Lighter shade for even rows
+                            },
+                            {"backgroundColor": "rgba(0, 2, 77, 0.5)", "color": "white"},  # Header color
+                        ],
                     ),
                 ],
             )
         ],
     )
-
 
 
 @app.callback(
@@ -428,11 +461,10 @@ def setup_inst_parameters(n_clicks, n_plants, n_dcs, n_custs, n_prods, seed):
 
 
 @app.callback([Output("loading-output-2", "children"), Output("data-store", "data")],
-              [Input("value-setter-set-btn", "n_clicks")],
-              [State("inst-pars-store", "data")]
-              )
-
-def init_data(n_clicks, inst_data):
+              [Input("value-setter-set-btn", "n_clicks"),
+               Input('upload-data', 'contents')],
+              [State("inst-pars-store", "data")])
+def init_data(n_clicks, uploaded_contents, inst_data):
     if n_clicks is None:
         raise PreventUpdate
 
@@ -451,12 +483,12 @@ def init_data(n_clicks, inst_data):
         return "incomplete form, please fill values", None
 
     try:
-        data = mk_data(n_plants, n_dcs, n_custs, n_prods, seed)
+        data = mk_data(n_plants, n_dcs, n_custs, n_prods, seed, uploaded_contents)
         jdata = jsonize(data)
         return f'Data in created from {inst_data}', jdata
-    except:
+    except Exception as e:
+        print(f"Error in init_data: {str(e)}")
         return 'No data could be prepared', None
-
 
 
 @app.callback(
@@ -512,6 +544,8 @@ def update_graph(n_clicks, data, n_clusters, n_dcs):
     # clustering part
     print(f'clustering {n_clusters}...')
     prods = weight.keys()
+    print(cust, dc, prods, demand, n_clusters)
+
     cluster_dc = preclustering(cust, dc, prods, demand, n_clusters)
     cdc_lats, cdc_lons = zip(*[dc[i] for i in cluster_dc])
     print("cluster_dc:", cluster_dc)

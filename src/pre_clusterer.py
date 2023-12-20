@@ -21,6 +21,7 @@ from sklearn.cluster import AgglomerativeClustering
 def preclustering(cust, dc, prods, demand, n_clusters):
     """
     Clustering as a predecessor for optimization, to be used in logistics network design
+    the objective is to Choose the distribution center with the highest demand in each cluster
 
     :param cust: Dictionary associating a customer id to its location as (latitute, longitude)
     :param dc: Dictionary associating a distribution center id to its (latitute, longitude)
@@ -42,6 +43,7 @@ def preclustering(cust, dc, prods, demand, n_clusters):
 
     # Assign customer demand to the closest distribution center using a simple heuristic
     dc_dem = np.zeros((n_dc,), np.int)
+
     for z in cust:
         dists = np.array([distance(cust[z], dc[k]).kilometers + 0.5 for k in key_dc], np.int)
         imin = np.argmin(dists)
@@ -62,4 +64,13 @@ def preclustering(cust, dc, prods, demand, n_clusters):
     return [key_dc[i] for i in cluster_dc]
 
 
+def compute_distances(locations_dict):
+    n = len(locations_dict)
+    distances = np.zeros((n, n), dtype=np.int)
+
+    for i, (key_i, loc_i) in enumerate(locations_dict.items()):
+        for j, (key_j, loc_j) in enumerate(locations_dict.items()):
+            distances[i, j] = distance(loc_i, loc_j).kilometers + 0.5
+
+    return distances
 
