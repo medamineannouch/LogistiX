@@ -64,7 +64,6 @@ Run the application:
 
 ## Screenshots
 
-![1](https://github.com/medamineannouch/LogistiX/assets/95173325/0fa842bd-eac1-4e85-bfd6-10ec299eedca)
 
 ![2](https://github.com/medamineannouch/LogistiX/assets/95173325/9ed22c1a-9e8f-4259-adb4-5cabbb6d9a19)
 
